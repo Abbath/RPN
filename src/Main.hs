@@ -8,6 +8,7 @@ import Data.Ratio
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import System.IO
 
 
 data Token = TNum Rational | TOp Text deriving Show
@@ -152,7 +153,9 @@ eval mem s = go s []
           isTNum _ = False
 
 showRational :: Rational -> Text
-showRational r = if denominator r == 1 then showT $ numerator r else showT (fromRational r :: Double)
+showRational r = if denominator r == 1 
+    then showT $ numerator r 
+    else showT @Double $ fromRational r
 
 showT :: Show a => a -> Text
 showT = T.pack . show
@@ -160,7 +163,10 @@ showT = T.pack . show
 main :: IO ()
 main = go 0
 
+go :: Rational -> IO()
 go mem = do
+    TIO.putStr "> "
+    hFlush stdout
     x <- TIO.getLine
     case parse x >>= eval mem of
         Left s -> do
