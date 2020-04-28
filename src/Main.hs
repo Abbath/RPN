@@ -4,6 +4,8 @@ module Main where
 import Control.Applicative
 import Data.Char
 import Data.Either
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Ratio
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -11,7 +13,7 @@ import qualified Data.Text.IO as TIO
 import System.IO
 
 
-data Token = TNum Rational | TOp Text deriving Show
+data Token = TNum Rational | TOp Text | TIdent Text deriving Show
 
 data Input = Input
   { inputLoc :: Int
@@ -121,8 +123,17 @@ opsym = parseIf "operator" (`elem` opSymbols)
 operata :: Parser Token
 operata = TOp . T.pack <$> wsBracket (some opsym)
 
+alfa :: Parser Char
+alfa = parseIf "letters and _" ((||) <$> isAlpha <*> (== '_'))
+
+alfaNum :: Parser Char
+alfaNum = alfa <|> parseIf "alfas and numbas" isDigit
+
+ident :: Parser Token
+ident = TIdent <$> wsBracket (T.cons <$> alfa <*> (T.pack <$> many alfaNum))
+
 tokah :: Parser Token
-tokah = numba<|> operata
+tokah = numba<|> operata <|> ident
 
 parse :: Text -> Either Text [Token]
 parse = go [] . Input 0
@@ -140,17 +151,24 @@ evalOp op x y = case op of
     "%" -> fromInteger $ mod (floor x) (floor y)
     _ -> x
 
-eval :: Rational -> [Token] -> Either Text (Rational, Rational)
-eval mem s = go s []
-    where go [TNum x] _ = return (x, x)
-          go s@(TNum x:_) _ | all isTNum s = return (x, x)
-          go [TNum x, TOp op] [] = go [TNum mem, TNum x, TOp op] []
+type Vars = Map Text Rational
+
+eval :: Vars -> [Token] -> Either Text (Rational, Vars)
+eval vars s = go (substitute s) []
+    where go [TNum x] _ = return (x, M.insert ("_" :: Text) x vars)
+          go [TIdent x, TNum y, TOp "="] []  = return (0, M.insert x y vars)
+          go s@(TNum x:_) _ | all isTNum s = return (x, M.insert ("_" :: Text) x vars)
+          go [TNum x, TOp op] [] = go [TNum (vars M.! "_"), TNum x, TOp op] []
           go (TNum x: TNum y: TOp op:xs) ys  =  go (TNum (evalOp op x y):xs) ys
-          go (TNum x: TOp op:xs) (TNum y:ys)  = go (TNum y: TNum x: TOp op:xs) ys
-          go (TNum x: TNum y: TNum z:xs) ys  =  go (TNum y: TNum z:xs) (TNum x:ys)
+          go (TNum x: TOp op:xs) (y:ys)  = go (y: TNum x: TOp op:xs) ys
+          go (x: TNum y: TNum z:xs) ys  =  go (TNum y: TNum z:xs) (x:ys)
           go _ _ = Left "Error: doing it wrong!"
           isTNum (TNum _) = True
           isTNum _ = False
+          substitute s@[TIdent _, TNum _, TOp "="] = s
+          substitute s = map (\x -> case x of 
+              b@(TIdent x) -> if M.member x vars then TNum (vars M.! x) else b
+              a -> a) s
 
 showRational :: Rational -> Text
 showRational r = if denominator r == 1 
@@ -161,9 +179,9 @@ showT :: Show a => a -> Text
 showT = T.pack . show
 
 main :: IO ()
-main = go 0
+main = go (M.singleton "_" 0 :: Vars)
 
-go :: Rational -> IO()
+go :: Vars -> IO()
 go mem = do
     TIO.putStr "> "
     hFlush stdout
