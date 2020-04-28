@@ -115,7 +115,7 @@ numba :: Parser Token
 numba = TNum . toRational <$> (wsBracket doubleLiteral)
 
 opSymbols :: String
-opSymbols = "+-/*%^$!~&|=><"
+opSymbols = "+-/*%^="
 
 opsym :: Parser Char
 opsym = parseIf "operator" (`elem` opSymbols)
@@ -143,11 +143,21 @@ parse = go [] . Input 0
         Left (ParserError n s) -> Left ("Error: " <> s <> " at " <> (T.pack . show $ n))
         Right (input1, tok) -> go (tok:acc) input1
 
+pow :: Rational -> Rational -> Rational
+pow a b | d2 a b && numerator b < 0 = toRational $ (fromRational a :: Double) ^^ numerator b
+        | d2 a b = toRational $ numerator a ^ numerator b
+        | otherwise = toRational $ (fromRational a :: Double) ** (fromRational b :: Double)
+  where
+    d1 = (==1) . denominator
+    d2 a b = d1 a && d1 b
+
+evalOp :: Text -> Rational -> Rational -> Rational
 evalOp op x y = case op of
     "+" -> x + y
     "-" -> x - y
     "*" -> x * y
     "/" -> x / y
+    "^" -> pow x y
     "%" -> fromInteger $ mod (floor x) (floor y)
     _ -> x
 
@@ -156,8 +166,8 @@ type Vars = Map Text Rational
 eval :: Vars -> [Token] -> Either Text (Rational, Vars)
 eval vars s = go (substitute s) []
     where go [TNum x] _ = return (x, M.insert ("_" :: Text) x vars)
-          go [TIdent x, TNum y, TOp "="] []  = return (0, M.insert x y vars)
-          go s@(TNum x:_) _ | all isTNum s = return (x, M.insert ("_" :: Text) x vars)
+          go [TIdent x, TNum y, TOp "="] []  = return (y, M.insert x y vars)
+          go s@(TNum x:_) _ | all isTNum s = return (x, M.insert "_" x vars)
           go [TNum x, TOp op] [] = go [TNum (vars M.! "_"), TNum x, TOp op] []
           go (TNum x: TNum y: TOp op:xs) ys  =  go (TNum (evalOp op x y):xs) ys
           go (TNum x: TOp op:xs) (y:ys)  = go (y: TNum x: TOp op:xs) ys
@@ -179,7 +189,7 @@ showT :: Show a => a -> Text
 showT = T.pack . show
 
 main :: IO ()
-main = go (M.singleton "_" 0 :: Vars)
+main = go (M.singleton "_" 0)
 
 go :: Vars -> IO()
 go mem = do
