@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, OverloadedStrings, ViewPatterns, FlexibleInstances #-}
+{-# LANGUAGE TypeApplications, OverloadedStrings, ViewPatterns, FlexibleInstances, LambdaCase #-}
 module Main where
 
 import Control.Applicative
@@ -176,13 +176,13 @@ eval vars s = go (substitute s) []
           isTNum (TNum _) = True
           isTNum _ = False
           substitute s@[TIdent _, TNum _, TOp "="] = s
-          substitute s = map (\x -> case x of 
+          substitute s = map (\case
               b@(TIdent x) -> if M.member x vars then TNum (vars M.! x) else b
               a -> a) s
 
 showRational :: Rational -> Text
-showRational r = if denominator r == 1 
-    then showT $ numerator r 
+showRational r = if denominator r == 1
+    then showT $ numerator r
     else showT @Double $ fromRational r
 
 showT :: Show a => a -> Text
