@@ -25,4 +25,4 @@ executable RPN
                      , containers
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options:         -static -optl-static -optl-pthread -fPIC
+  ghc-options:         -static -optl-pthread -fPIC

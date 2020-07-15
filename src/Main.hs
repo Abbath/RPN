@@ -161,6 +161,23 @@ evalOp op x y = case op of
     "%" -> fromInteger $ mod (floor x) (floor y)
     _ -> x
 
+funs :: [Text]
+funs = ["sin", "cos", "tan", "asin", "acos", "atan", "log", "exp", "sqrt"]
+
+evalFun :: Text -> Rational -> Rational
+evalFun fun x = toRational $ (case fun of
+    "sin" -> sin . fr
+    "cos" -> cos . fr
+    "tan" -> tan . fr
+    "asin" -> asin . fr
+    "acos" -> acos . fr 
+    "atan" -> \b -> atan2 (fromInteger (numerator b)) (fromInteger (denominator b)) 
+    "log" -> log . fr
+    "sqrt" -> sqrt . fr
+    "exp" -> exp . fr ) x
+  where
+    fr a = fromRational a :: Double 
+
 type Vars = Map Text Rational
 
 eval :: Vars -> [Token] -> Either Text (Rational, Vars)
@@ -169,9 +186,11 @@ eval vars s = go (substitute s) []
           go [TIdent x, TNum y, TOp "="] []  = return (y, M.insert x y vars)
           go s@(TNum x:_) _ | all isTNum s = return (x, M.insert "_" x vars)
           go [TNum x, TOp op] [] = go [TNum (vars M.! "_"), TNum x, TOp op] []
+          go (TNum x: TIdent i:xs) ys | i `elem` funs = go (TNum (evalFun i x):xs) ys
           go (TNum x: TNum y: TOp op:xs) ys  =  go (TNum (evalOp op x y):xs) ys
           go (TNum x: TOp op:xs) (y:ys)  = go (y: TNum x: TOp op:xs) ys
           go (x: TNum y: TNum z:xs) ys  =  go (TNum y: TNum z:xs) (x:ys)
+          go (x: TNum y: TIdent i:xs) ys | i `elem` funs  =  go (TNum y: TIdent i:xs) (x:ys)
           go _ _ = Left "Error: doing it wrong!"
           isTNum (TNum _) = True
           isTNum _ = False
